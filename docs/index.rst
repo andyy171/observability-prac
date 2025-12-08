@@ -17,11 +17,13 @@ This is a foundational solution. It works for monitoring and troubleshooting in 
 The solution is built around two main data types: **logs** and **metrics**.
 
 1. Centralized Logging
+
 * Collection: Lightweight agents (Promtail) are deployed on each node to collect log files (from /var/log/ceph, /var/log/nova, etc.).
 * Processing & Storage: Logs are sent to a central processing service (Loki), where they are indexed and stored.
 * Format: Applications should output structured logs (like JSON) where possible, but the system can also handle plain text logs.
 
 2. Metrics Collection
+
 * Method: Uses a pull-based model with Prometheus.
 * Standardization: Services expose metrics in the Prometheus format on an HTTP endpoint (like /metrics).
 * Scraping: Prometheus servers periodically scrape (collect) metrics from these endpoints and store them as time-series data.

@@ -12,9 +12,13 @@ Infrastructure setup requirements:
 
 Ceph Cluster Setup
 ---------------------
+
 Each node in the cluster must have a unique hostname. Set the hostname on each node accordingly.
+
+
 Setup Hostname
 ~~~~~~~~~~~~~~~~~~~
+
 
 .. code-block:: bash
     sudo hostnamectl set-hostname ceph-node01 # trên node01
@@ -22,6 +26,7 @@ Setup Hostname
     sudo hostnamectl set-hostname ceph-node03  # trên node03
 
 Then, update the /etc/hosts file on all nodes to ensure they can resolve each other by hostname.
+
 .. code-block:: bash
     cat << EOF | sudo tee /etc/hosts
     127.0.0.1   localhost
@@ -35,6 +40,7 @@ Then, update the /etc/hosts file on all nodes to ensure they can resolve each ot
 EOF
 
 Verify the hostname configuration on each node:
+
 .. code-block:: bash
     hostname -f
 
@@ -44,6 +50,7 @@ Configure Network
 Proper network configuration is essential for cluster communication. We'll disable cloud-init network management and set static IP addresses.
 
 On each node:
+
 
 .. code-block:: bash
     # Disable cloud-init network configuration
@@ -89,6 +96,7 @@ Prepare Disks and Disable Swap
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 Ceph OSDs require dedicated disks. We'll prepare additional disks and disable swap to ensure optimal performance.
 
+
 .. code-block:: bash
     # Disable swap - Ceph requires swap to be disabled
     sudo swapoff -a
@@ -106,7 +114,6 @@ Install Required Packages
 
 - Install essential packages including Docker, which Ceph will use for containerized deployment.
 
-Thực hiện trên các node :
 .. code-block:: bash
     # Update package lists and upgrade existing packages
     sudo apt update && sudo apt upgrade -y
@@ -127,9 +134,11 @@ Thực hiện trên các node :
 
 Configure Firewall
 ~~~~~~~~~~~~~~~~~~~
+
 Open necessary ports for Ceph services to communicate across the cluster.
 
 Apply in all nodes:
+
 .. code-block:: bash
     # Install UFW (Uncomplicated Firewall) if not present
     sudo apt install -y ufw
@@ -165,7 +174,9 @@ Apply in all nodes:
 
 Configure NTP (Time Synchronization)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 Time synchronization is critical for Ceph cluster consistency. Enable and start required services.
+
 
 .. code-block:: bash
     # Enable required services at boot
@@ -173,13 +184,16 @@ Time synchronization is critical for Ceph cluster consistency. Enable and start 
 
 Configure SSH Keyless Access for Root
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 Passwordless SSH access between nodes is required for Ceph deployment and management.
 
 First, change password for root user on all nodes (if not already set):
+
 .. code-block:: bash
     sudo passwd root
 
 Then, on node01, generate SSH keys and distribute them to other nodes:
+
 .. code-block:: bash
 
     # Create SSH key for root user
@@ -194,6 +208,7 @@ Then, on node01, generate SSH keys and distribute them to other nodes:
     sudo chmod 644 /root/.ssh/id_ed25519.pub
 
 Temporarily enable password authentication on all nodes to copy SSH keys:
+
 .. code-block:: bash
     # On ALL nodes, enable password authentication temporarily
     sudo sed -i 's/^#*PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
@@ -202,6 +217,7 @@ Temporarily enable password authentication on all nodes to copy SSH keys:
     sudo systemctl restart ssh
 
 Back on `ceph-node01`:
+
 .. code-block:: bash
     # Remove old SSH fingerprints
     ssh-keygen -R ceph-node02
@@ -216,7 +232,8 @@ Back on `ceph-node01`:
     ssh -o StrictHostKeyChecking=no root@ceph-node03 'hostname -f; whoami'
 
 
-After verifying keyless login works, disable password authentication on all nodes for security:
+- After verifying keyless login works, disable password authentication on all nodes for security:
+
 .. code-block:: bash
 
     # On ALL nodes, disable password authentication
@@ -230,7 +247,9 @@ After verifying keyless login works, disable password authentication on all node
 
 Bootstrap Ceph Cluster
 ~~~~~~~~~~~~~~~~~~~~~~~~
-Initialize the Ceph cluster on the first node (ceph-node01).
+
+- Initialize the Ceph cluster on the first node (ceph-node01).
+
 .. code-block:: bash
     # Update package list and install cephadm
     sudo apt update
@@ -250,7 +269,8 @@ Initialize the Ceph cluster on the first node (ceph-node01).
     # Set Grafana API URL for the dashboard
     ceph dashboard set-grafana-api-url http://192.168.198.201:3000
 
-Verify the bootstrap was successful:
+- Verify the bootstrap was successful:
+
 .. code-block:: bash
     # Check cluster status
     ceph -s
@@ -260,9 +280,11 @@ Verify the bootstrap was successful:
 
 Add Nodes to Cluster
 +++++++++++++++++++++
+
 Add the remaining nodes to the Ceph cluster for distributed storage.
 
 From `ceph-node01`:
+
 .. code-block:: bash
     # Copy Ceph public key to other nodes for cluster management
     sudo ssh-copy-id -f -i /etc/ceph/ceph.pub root@node2.ceph.local
@@ -285,6 +307,7 @@ From `ceph-node01`:
 
 Disable initial security warnings:
 
+
 .. code-block:: bash
     sudo ceph config set global mon_warn_on_insecure_global_id_reclaim false
     sudo ceph config set global mon_warn_on_insecure_global_id_reclaim_allowed false
@@ -292,7 +315,9 @@ Disable initial security warnings:
 
 Deploy Ceph Services
 +++++++++++++++++++++
+
 Deploy the core Ceph services across the cluster.
+
 
 .. code-block:: bash
     # Deploy Monitor (MON) daemons - 3 monitors for quorum
@@ -376,7 +401,7 @@ cd ~/openstack
 git clone https://opendev.org/openstack/kolla-ansible
 cd kolla-ansible
 git fetch --all --tags
-git checkout stable/2024.1
+git checkout stable/2024.2
 python -m pip install .
 which kolla-ansible
 
@@ -387,8 +412,8 @@ cd ~/openstack/kolla-ansible
 cp -r etc/kolla/* /etc/kolla
 
 
-cd openstack
-cp ansible/inventory/all-in-one ~/openstack/all-in-one
+cd ~/openstack
+cp etc/kolla/inventory/all-in-one ~/openstack/all-in-one
 ls ~/openstack
 
 kolla-genpwd -p /etc/kolla/passwords.yml
@@ -398,9 +423,9 @@ sudo chmod 640 /etc/kolla/passwords.yml
 sudo nano /etc/kolla/globals.yml
 ```bash
 kolla_base_distro: "ubuntu"
-openstack_release: "2024.1"
+openstack_release: "2024.2"
 
-kolla_internal_vip_address: "192.168.150.149"
+kolla_internal_vip_address: "192.168.198.149"
 
 network_interface: "ens33"
 neutron_external_interface: "ens34"
@@ -408,7 +433,7 @@ neutron_external_interface: "ens34"
 nova_compute_virt_type: "qemu"
 
 enable_horizon: "yes"
-```
+
 
 cd ~/openstack
 source bin/activate
