@@ -1,0 +1,92 @@
+# ================================================
+# Python
+# ================================================
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Distribution / packaging
+build/
+dist/
+pip-wheel-metadata/
+*.egg-info/
+*.egg
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# ================================================
+# Sphinx / ReadTheDocs
+# ================================================
+# Build output
+_docs/
+docs/_build/
+docs/build/
+build/
+Thumbs.db
+
+# Generated API docs (if using sphinx-apidoc)
+docs/_autosummary/
+docs/_generated/
+docs/api/
+
+# ReadTheDocs local builds
+.readthedocs.yml.local
+
+# ================================================
+# OS / Editor files
+# ================================================
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# VSCode / PyCharm
+.vscode/
+.idea/
+
+# ================================================
+# dotenv / secret files
+# ================================================
+.env
+*.env
+*.key
+*.secret
+*.token
+
+# ================================================
+# Misc
+# ================================================
+*.log
+*.tmp
+*.bak
