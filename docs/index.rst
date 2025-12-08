@@ -35,10 +35,15 @@ The following table of contents of the projects.
 .. toctree::
    :maxdepth: 3
    :caption: Main Concepts
-
+   
    architecture 
    prerequisites
-   deployment/index    
-   testing/index       
+   
+.. toctree::
+   :maxdepth: 3
+   :caption: Project Workflow
+   
+   deployment/index
+   testing/index  
 
 

@@ -11,7 +11,7 @@ Infrastructure setup requirements:
 
 
 Ceph Cluster Setup
---------------------
+---------------------
 Each node in the cluster must have a unique hostname. Set the hostname on each node accordingly.
 Setup Hostname
 ~~~~~~~~~~~~~~~~~~~
@@ -40,7 +40,7 @@ Verify the hostname configuration on each node:
 
 
 Configure Network
----------------------
+~~~~~~~~~~~~~~~~~~~
 Proper network configuration is essential for cluster communication. We'll disable cloud-init network management and set static IP addresses.
 
 On each node:
@@ -125,170 +125,199 @@ Thực hiện trên các node :
     sudo docker version
     sudo docker info
 
-### Setup Firewall
+Configure Firewall
+~~~~~~~~~~~~~~~~~~~
+Open necessary ports for Ceph services to communicate across the cluster.
 
-Áp dụng tất cả các node :
+Apply in all nodes:
+.. code-block:: bash
+    # Install UFW (Uncomplicated Firewall) if not present
+    sudo apt install -y ufw
 
-```bash
-# Cài đặt nếu chưa có 
-sudo apt install -y ufw
+    # Check current firewall status
+    sudo ufw status verbose
 
-# Kiểm tra trạng thái
-sudo ufw status verbose
+    # Reset to defaults (if previously configured)
+    sudo ufw --force reset
 
-## Reset về trạng thái mặc định nếu trước đó có setup
-sudo ufw --force reset
+    # Set default policies
+    sudo ufw default deny incoming
+    sudo ufw default allow outgoing
 
-# Mặc định deny tất cả inbound, allow outbound
-sudo ufw default deny incoming
-sudo ufw default allow outgoing
+    # Allow required Ceph ports
+    sudo ufw allow 22/tcp comment 'SSH Access'
+    sudo ufw allow 6789/tcp comment 'Ceph MON'
+    sudo ufw allow 8443/tcp comment 'Ceph MGR Dashboard'
+    sudo ufw allow 9283/tcp comment 'Ceph MGR Prometheus metrics'
+    sudo ufw allow 6800:7300/tcp comment 'Ceph OSDs'
+    sudo ufw allow 3000/tcp comment 'ceph Grafana Dashboard'
+    sudo ufw allow 5000/tcp comment 'Ceph REST API'
+    sudo ufw allow 7480/tcp comment 'Ceph RGW'
+    sudo ufw allow 3300/tcp comment 'Ceph MON quorum'
+    sudo ufw allow 9100/tcp comment 'Node exporter metrics'
 
-sudo ufw allow 22/tcp comment 'SSH Access'
-sudo ufw allow 6789/tcp comment 'Ceph MON'
-sudo ufw allow 8443/tcp comment 'Ceph MGR Dashboard'
-sudo ufw allow 9283/tcp comment 'Ceph MGR Prometheus metrics'
-sudo ufw allow 6800:7300/tcp comment 'Ceph OSDs'
-sudo ufw allow 3000/tcp comment 'ceph Grafana Dashboard'
-sudo ufw allow 5000/tcp comment 'Ceph REST API'
-sudo ufw allow 7480/tcp comment 'Ceph RGW'
-sudo ufw allow 3300/tcp comment 'Ceph MON quorum'
-sudo ufw allow 9100/tcp comment 'Node exporter metrics'
+    # Allow cluster network traffic
+    sudo ufw allow from 192.168.198.0/24 comment 'Cluster network traffic'
 
-sudo ufw allow from 192.168.198.0/24 comment 'Cluster network traffic'
+    # Enable firewall and verify configuration
+    sudo ufw enable
+    sudo ufw status verbose
 
+Configure NTP (Time Synchronization)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Time synchronization is critical for Ceph cluster consistency. Enable and start required services.
 
-# Enable và kiểm tra
-sudo ufw enable
-sudo ufw status verbose
-```
+.. code-block:: bash
+    # Enable required services at boot
+    sudo systemctl enable --now docker chrony ssh
 
-### Setup NTP ( Network Time Protocol ) - Đồng bộ thời gian
+Configure SSH Keyless Access for Root
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Passwordless SSH access between nodes is required for Ceph deployment and management.
 
-```bash
-# Đồng bộ thời gian chính xác
-sudo systemctl enable --now docker chrony ssh
-```
+First, change password for root user on all nodes (if not already set):
+.. code-block:: bash
+    sudo passwd root
 
-### **Cấu hình SSH keyless for root**
+Then, on node01, generate SSH keys and distribute them to other nodes:
+.. code-block:: bash
 
-```bash
-# Tạo ssh key trên node01 (lưu ý: dùng đường dẫn tuyệt đối đến /root/.ssh)
-sudo rm -rf /root/.ssh
-sudo mkdir -p /root/.ssh
-sudo ssh-keygen -t ed25519 -N "" -f /root/.ssh/id_ed25519
-# Nếu cần tương thích ngược, chỉ tạo RSA thay cho ED25519
-# sudo ssh-keygen -t rsa -b 4096 -N "" -f /root/.ssh/id_rsa
+    # Create SSH key for root user
+    sudo rm -rf /root/.ssh
+    sudo mkdir -p /root/.ssh
+    sudo ssh-keygen -t ed25519 -N "" -f /root/.ssh/id_ed25519
 
-# Quyền thư mục / file -node 1
-sudo chown root:root /root/.ssh
-sudo chmod 700 /root/.ssh
-sudo chmod 600 /root/.ssh/id_ed25519
-sudo chmod 644 /root/.ssh/id_ed25519.pub
+    # Set proper permissions
+    sudo chown root:root /root/.ssh
+    sudo chmod 700 /root/.ssh
+    sudo chmod 600 /root/.ssh/id_ed25519
+    sudo chmod 644 /root/.ssh/id_ed25519.pub
 
-# Tạm bật password root (nếu cần) để dễ thao tác rồi tắt sau khi xác nhận keyless
-# (chỉ chạy nếu bạn chưa set password root)
-sudo passwd root
+Temporarily enable password authentication on all nodes to copy SSH keys:
+.. code-block:: bash
+    # On ALL nodes, enable password authentication temporarily
+    sudo sed -i 's/^#*PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
+    sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/g' /etc/ssh/sshd_config
+    sudo sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config
+    sudo systemctl restart ssh
 
-# Cho phép root login bằng password (tạm thời trên cả 3 node)
-sudo sed -i 's/^#*PermitRootLogin.*/PermitRootLogin yes/' /etc/ssh/sshd_config
-sudo sed -i 's/#PasswordAuthentication yes/PasswordAuthentication yes/g' /etc/ssh/sshd_config
-sudo sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config
-sudo systemctl restart ssh
+Back on `ceph-node01`:
+.. code-block:: bash
+    # Remove old SSH fingerprints
+    ssh-keygen -R ceph-node02
+    ssh-keygen -R ceph-node03
 
+    # Copy SSH public key to other nodes
+    sudo ssh-copy-id -i /root/.ssh/id_ed25519.pub root@ceph-node02
+    sudo ssh-copy-id -i /root/.ssh/id_ed25519.pub root@ceph-node03
 
-# Clean fingerprint
-ssh-keygen -R node2.ceph.local
-ssh-keygen -R node3.ceph.local
-ssh-keygen -R node4.ceph.local
-
-# Copy public key tới các node (gộp 1 lần, chỉ dùng id_ed25519.pub) - node01
-sudo ssh-copy-id -i /root/.ssh/id_ed25519.pub root@node2.ceph.local
-sudo ssh-copy-id -i /root/.ssh/id_ed25519.pub root@node3.ceph.local
-sudo ssh-copy-id -i /root/.ssh/id_ed25519.pub root@node4.ceph.local
-
-
-
-# Kiểm tra keyless login
-ssh -o StrictHostKeyChecking=no root@node2.ceph.local 'hostname -f; whoami'
-ssh -o StrictHostKeyChecking=no root@node3.ceph.local 'hostname -f; whoami'
-
-# Sau khi xác nhận keyless hoạt động: vô hiệu hoá password authentication (tất cả node)
-sudo sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-sudo sed -i 's/^#*PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
-sudo systemctl restart ssh
-
-# Kiểm tra trạng thái thời gian / đồng bộ
-timedatectl status
-sudo systemctl status chrony
-```
-
-## Bootstrap Ceph Cluster 
-sudo apt update
-sudo apt install -y cephadm
-
-sudo cephadm bootstrap \
-    --mon-ip 192.168.198.101 \
-    --cluster-network 192.168.198.0/24 \
-    --initial-dashboard-user admin \
-    --initial-dashboard-password admin123 \
-    --allow-fqdn-hostname \
+    # Test keyless login
+    ssh -o StrictHostKeyChecking=no root@ceph-node02 'hostname -f; whoami'
+    ssh -o StrictHostKeyChecking=no root@ceph-node03 'hostname -f; whoami'
 
 
-sudo apt update && sudo apt install -y ceph-common
+After verifying keyless login works, disable password authentication on all nodes for security:
+.. code-block:: bash
 
-ceph dashboard set-grafana-api-url http://192.168.198.201:3000
+    # On ALL nodes, disable password authentication
+    sudo sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+    sudo sed -i 's/^#*PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
+    sudo systemctl restart ssh
 
-# KIỂM TRA sau bootstrap
-ceph -s
-ceph status
-ceph orch host ls
+    # Check time synchronization status
+    timedatectl status
+    sudo systemctl status chrony
 
+Bootstrap Ceph Cluster
+~~~~~~~~~~~~~~~~~~~~~~~~
+Initialize the Ceph cluster on the first node (ceph-node01).
+.. code-block:: bash
+    # Update package list and install cephadm
+    sudo apt update
+    sudo apt install -y cephadm
 
+    # Bootstrap the Ceph cluster
+    sudo cephadm bootstrap \
+        --mon-ip 192.168.198.101 \
+        --cluster-network 192.168.198.0/24 \
+        --initial-dashboard-user admin \
+        --initial-dashboard-password admin123 \
+        --allow-fqdn-hostname
 
-# Kết nối các node
-sudo ssh-copy-id -f -i /etc/ceph/ceph.pub root@node2.ceph.local
-sudo ssh-copy-id -f -i /etc/ceph/ceph.pub root@node3.ceph.local
-sudo ssh-copy-id -f -i /etc/ceph/ceph.pub root@node4.ceph.local
+    # Install ceph-common utilities
+    sudo apt update && sudo apt install -y ceph-common
 
-# Kiểm tra lại kết nối (từ node01):
-ssh root@node2.ceph.local hostname
-ssh root@node3.ceph.local hostname
-ssh root@node4.ceph.local hostname
+    # Set Grafana API URL for the dashboard
+    ceph dashboard set-grafana-api-url http://192.168.198.201:3000
 
-# Thêm các node vào cluster
-sudo ceph orch host add node2.ceph.local 192.168.198.102
-sudo ceph orch host add node3.ceph.local 192.168.198.103  
-sudo ceph orch host add node4.ceph.local 192.168.198.104
-
-# Kiểm tra tổng t
-ceph orch host ls
-ceph -s
-
-# Disable các cảnh báo ban đầu
-sudo ceph config set global mon_warn_on_insecure_global_id_reclaim false
-sudo ceph config set global mon_warn_on_insecure_global_id_reclaim_allowed false
-
-
-## Triển khai dịch vụ Ceph 
-sudo ceph orch apply mon --placement "ceph-node01,ceph-node02,ceph-node03"
-sudo ceph mon stat
-
-sudo ceph orch apply mgr --placement "ceph-node01,ceph-node02,ceph-node03"
-sudo ceph mgr module ls
-
-sudo ceph orch device ls
-sudo ceph orch apply osd --all-available-devices
-sudo ceph osd tree
+Verify the bootstrap was successful:
+.. code-block:: bash
+    # Check cluster status
+    ceph -s
+    ceph status
+    ceph orch host ls
 
 
+Add Nodes to Cluster
++++++++++++++++++++++
+Add the remaining nodes to the Ceph cluster for distributed storage.
 
-## Openstack AIO node Setup
+From `ceph-node01`:
+.. code-block:: bash
+    # Copy Ceph public key to other nodes for cluster management
+    sudo ssh-copy-id -f -i /etc/ceph/ceph.pub root@node2.ceph.local
+    sudo ssh-copy-id -f -i /etc/ceph/ceph.pub root@node3.ceph.local
+    sudo ssh-copy-id -f -i /etc/ceph/ceph.pub root@node4.ceph.local
+
+    # Test SSH connections
+    ssh root@node2.ceph.local hostname
+    ssh root@node3.ceph.local hostname
+    ssh root@node4.ceph.local hostname
+
+    # Add nodes to the cluster
+    sudo ceph orch host add node2.ceph.local 192.168.198.102
+    sudo ceph orch host add node3.ceph.local 192.168.198.103  
+    sudo ceph orch host add node4.ceph.local 192.168.198.104
+
+    # Verify all hosts are added
+    ceph orch host ls
+    ceph -s
+
+Disable initial security warnings:
+
+.. code-block:: bash
+    sudo ceph config set global mon_warn_on_insecure_global_id_reclaim false
+    sudo ceph config set global mon_warn_on_insecure_global_id_reclaim_allowed false
+
+
+Deploy Ceph Services
++++++++++++++++++++++
+Deploy the core Ceph services across the cluster.
+
+.. code-block:: bash
+    # Deploy Monitor (MON) daemons - 3 monitors for quorum
+    sudo ceph orch apply mon --placement "ceph-node01,ceph-node02,ceph-node03"
+    sudo ceph mon stat
+
+    # Deploy Manager (MGR) daemons for cluster management
+    sudo ceph orch apply mgr --placement "ceph-node01,ceph-node02,ceph-node03"
+    sudo ceph mgr module ls
+
+    # Deploy OSDs (Object Storage Daemons) on all available devices
+    sudo ceph orch device ls
+    sudo ceph orch apply osd --all-available-devices
+    sudo ceph osd tree
+
+
+
+Openstack AIO node Setup
 
 echo "network: {config: disabled}" | sudo tee /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
 
 ## Xóa các file do cloud-init sinh ra
 sudo rm -f /etc/netplan/50-cloud-init.yaml
 sudo rm -f /etc/netplan/90-installer-network.yaml
+sudo cloud-init clean --logs
 ## File cấu hình ( tùy chỉnh theo tên card mạng của máy)
 cat << EOF | sudo tee /etc/netplan/01-netcfg.yaml
 network:
@@ -297,7 +326,7 @@ network:
   ethernets:
     ens33:
       addresses:
-        - 192.168.198.167/24
+        - 192.168.198.110/24
       routes:
         - to: 0.0.0.0/0
           via: 192.168.198.2
