@@ -1,5 +1,5 @@
 Observability Document
-=====================================================
+======================
 
 Project Overview: Goals and Scope
 ---------------------------------
@@ -28,10 +28,12 @@ The solution is built around two main data types: **logs** and **metrics**.
 * Key Metric Sources:
 * Node Exporter: For basic host metrics (CPU, memory, disk space).
 * Ceph Exporter & OpenStack Exporters: For cluster-specific health and performance metrics.
+
 Document Structure 
 ~~~~~~~~~~~~~~~~~~
 
 The following table of contents of the projects.
+
 .. toctree::
    :maxdepth: 3
    :caption: Main Concepts
